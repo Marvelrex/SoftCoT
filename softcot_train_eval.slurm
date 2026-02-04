@@ -21,8 +21,18 @@ export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 SCRATCH_ROOT="${SCRATCH_ROOT:-/home/jyang001/scratch}"
+CODE_ROOT="${CODE_ROOT:-/home/jyang001/jyang001/projects/SoftCoT}"
 PROJECT_ROOT="${PROJECT_ROOT:-$SCRATCH_ROOT/SoftCoT}"
-mkdir -p "$PROJECT_ROOT" "$PROJECT_ROOT/logs/softcot" "$PROJECT_ROOT/outputs" "$PROJECT_ROOT/ckpt"
+
+mkdir -p "$PROJECT_ROOT"
+
+# Sync code into scratch if not already present (or refresh)
+if [[ ! -f "$PROJECT_ROOT/train_softcot.py" ]]; then
+  echo "[SoftCoT] Syncing code from $CODE_ROOT to $PROJECT_ROOT"
+  rsync -a --delete "$CODE_ROOT"/ "$PROJECT_ROOT"/
+fi
+
+mkdir -p "$PROJECT_ROOT/logs/softcot" "$PROJECT_ROOT/outputs" "$PROJECT_ROOT/ckpt"
 cd "$PROJECT_ROOT"
 
 # Core models
