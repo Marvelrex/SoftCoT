@@ -20,19 +20,11 @@ source /home/jyang001/jyang001/projects/envs/quin/bin/activate
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
+PROJECT_ROOT="${PROJECT_ROOT:-/home/jyang001/jyang001/projects/SoftCoT}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/home/jyang001/scratch}"
-CODE_ROOT="${CODE_ROOT:-/home/jyang001/jyang001/projects/SoftCoT}"
-PROJECT_ROOT="${PROJECT_ROOT:-$SCRATCH_ROOT/SoftCoT}"
+CKPT_BASE="${CKPT_BASE:-$SCRATCH_ROOT/SoftCoT/ckpt}"
 
-mkdir -p "$PROJECT_ROOT"
-
-# Sync code into scratch if not already present (or refresh)
-if [[ ! -f "$PROJECT_ROOT/train_softcot.py" ]]; then
-  echo "[SoftCoT] Syncing code from $CODE_ROOT to $PROJECT_ROOT"
-  rsync -a --delete "$CODE_ROOT"/ "$PROJECT_ROOT"/
-fi
-
-mkdir -p "$PROJECT_ROOT/logs/softcot" "$PROJECT_ROOT/outputs" "$PROJECT_ROOT/ckpt"
+mkdir -p "$PROJECT_ROOT/logs/softcot" "$PROJECT_ROOT/outputs" "$CKPT_BASE"
 cd "$PROJECT_ROOT"
 
 # Core models
@@ -62,7 +54,7 @@ for i in $(seq 1 "$RUNS"); do
   OUTPUT_NAME_RUN="${OUTPUT_BASE}-${RUN_TAG}"
 
   # Derived checkpoint path (matches train_softcot.py naming)
-  CKPT_DIR="$PROJECT_ROOT/ckpt/${OUTPUT_NAME_RUN}-${TASK_NAME}-${N_EPOCHS}-${NUM_THOUGHT_TOKENS}-${BASE_MODEL_NAME}-${ASSIST_MODEL_NAME}"
+  CKPT_DIR="$CKPT_BASE/${OUTPUT_NAME_RUN}-${TASK_NAME}-${N_EPOCHS}-${NUM_THOUGHT_TOKENS}-${BASE_MODEL_NAME}-${ASSIST_MODEL_NAME}"
   PROJ_BIN="$CKPT_DIR/projection.bin"
 
   RUN_PRED_DIR="$PRED_BASE/${RUN_TAG}"
