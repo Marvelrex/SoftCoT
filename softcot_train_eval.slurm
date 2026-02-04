@@ -22,8 +22,8 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 SCRATCH_ROOT="${SCRATCH_ROOT:-/home/jyang001/scratch}"
 PROJECT_ROOT="${PROJECT_ROOT:-$SCRATCH_ROOT/SoftCoT}"
+mkdir -p "$PROJECT_ROOT" "$PROJECT_ROOT/logs/softcot" "$PROJECT_ROOT/outputs" "$PROJECT_ROOT/ckpt"
 cd "$PROJECT_ROOT"
-mkdir -p logs/softcot outputs
 
 # Core models
 BASE_MODEL_ID="${BASE_MODEL_ID:-meta-llama/Llama-3.1-8B-Instruct}"
