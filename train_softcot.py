@@ -13,6 +13,7 @@ from fastNLP import logger
 from data_loader import GSM8KLoader, StrategyQALoader, AugASDivLoader, AQuALoader
 from llm_model import EfficientSoftCoTFromSmallModel
 from utils import pre_process_strategy_qa, pre_process_gsm8k, pre_process_aqua, CustomDataCollator
+from sft_config import DEFAULT_SFT_CONFIG
 
 
 args = argparse.ArgumentParser()
@@ -78,12 +79,23 @@ elif 'Qwen' in small_model_id:
 else:
     raise NotImplementedError
 
+if tune_assistant_model or tune_base_model:
+    logger.info(
+        f"Applying baseline SFT LoRA config "
+        f"(use_lora={DEFAULT_SFT_CONFIG.use_lora}, "
+        f"r={DEFAULT_SFT_CONFIG.lora_r}, "
+        f"alpha={DEFAULT_SFT_CONFIG.lora_alpha}, "
+        f"dropout={DEFAULT_SFT_CONFIG.lora_dropout}, "
+        f"targets={DEFAULT_SFT_CONFIG.lora_target_modules})."
+    )
+
 model = EfficientSoftCoTFromSmallModel(
     small_model_id,
     large_model_id,
     num_thought_tokens,
     tune_base_model=tune_base_model,
     tune_assistant_model=tune_assistant_model,
+    lora_config=DEFAULT_SFT_CONFIG,
 )
 
 logger.info(f'Successfully Init Model `{model.__class__.__name__}`')

@@ -9,18 +9,21 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from transformers.cache_utils import Cache
 from peft import PeftModel, LoraConfig
 from fastNLP import logger
+from sft_config import SoftCOTSFTConfig, DEFAULT_SFT_CONFIG
 
 
 class SoftCoTAbstractClass(nn.Module):
 
-    def __init__(self,
-         small_language_model_id,
-         large_language_model_id,
-         num_thought_tokens=2,
-         tune_assistant_model=False,
-         tune_base_model=False,
-         **kwargs,
-     ):
+    def __init__(
+        self,
+        small_language_model_id,
+        large_language_model_id,
+        num_thought_tokens=2,
+        tune_assistant_model=False,
+        tune_base_model=False,
+        lora_config: Optional[SoftCOTSFTConfig] = None,
+        **kwargs,
+    ):
         super().__init__()
         self.assistant_model = AutoModelForCausalLM.from_pretrained(
             small_language_model_id,
@@ -53,6 +56,7 @@ class SoftCoTAbstractClass(nn.Module):
         self.num_thought_tokens = num_thought_tokens
         self.tune_assistant_model = tune_assistant_model
         self.tune_base_model = tune_base_model
+        self.lora_config = lora_config or DEFAULT_SFT_CONFIG
 
         self.projection = nn.Linear(self.assistant_model.config.hidden_size, self.base_model.config.hidden_size,
                                     dtype=torch.bfloat16)
@@ -62,21 +66,41 @@ class SoftCoTAbstractClass(nn.Module):
         for n, p in self.base_model.named_parameters():
             p.requires_grad = tune_base_model
 
-        # LoRA configuration
-        lora_config = LoraConfig(
-            r=16,  # Rank
-            lora_alpha=32,  # Scaling factor
-            target_modules=["q_proj", "v_proj"],  # Modules to apply LoRA (depends on your model)
-            lora_dropout=0.1,  # Dropout probability
-            bias="none",  # Type of bias ("none", "all", or "lora_only")
-            task_type="CAUSAL_LM"  # Task type (e.g., "SEQ2SEQ_LM", "CAUSAL_LM", etc.)
-        )
-        if tune_assistant_model:
-            self.assistant_model = PeftModel(self.assistant_model, lora_config)
-            logger.info(f'LoRA assistant model.')
-        if tune_base_model:
-            self.base_model = PeftModel(self.base_model, lora_config)
-            logger.info(f'LoRA base model.')
+        if tune_assistant_model or tune_base_model:
+            if not self.lora_config.use_lora:
+                raise ValueError("LoRA must stay enabled when tuning SoftCoT models (baseline enforces use_lora=True).")
+            assistant_lora = LoraConfig(
+                r=self.lora_config.lora_r,
+                lora_alpha=self.lora_config.lora_alpha,
+                target_modules=list(self.lora_config.lora_target_modules),
+                lora_dropout=self.lora_config.lora_dropout,
+                bias=self.lora_config.bias,
+                task_type=self.lora_config.task_type,
+            )
+            base_lora = LoraConfig(
+                r=self.lora_config.lora_r,
+                lora_alpha=self.lora_config.lora_alpha,
+                target_modules=list(self.lora_config.lora_target_modules),
+                lora_dropout=self.lora_config.lora_dropout,
+                bias=self.lora_config.bias,
+                task_type=self.lora_config.task_type,
+            )
+            if tune_assistant_model:
+                self.assistant_model = PeftModel(self.assistant_model, assistant_lora)
+                logger.info(
+                    f"LoRA assistant model "
+                    f"(r={self.lora_config.lora_r}, alpha={self.lora_config.lora_alpha}, "
+                    f"dropout={self.lora_config.lora_dropout}, "
+                    f"targets={self.lora_config.lora_target_modules})."
+                )
+            if tune_base_model:
+                self.base_model = PeftModel(self.base_model, base_lora)
+                logger.info(
+                    f"LoRA base model "
+                    f"(r={self.lora_config.lora_r}, alpha={self.lora_config.lora_alpha}, "
+                    f"dropout={self.lora_config.lora_dropout}, "
+                    f"targets={self.lora_config.lora_target_modules})."
+                )
 
     @property
     def device(self):
@@ -115,6 +139,7 @@ class EfficientSoftCoTFromSmallModel(SoftCoTAbstractClass):
         num_thought_tokens=2,
         tune_assistant_model=False,
         tune_base_model=False,
+        lora_config: Optional[SoftCOTSFTConfig] = None,
         path_to_projection_module=None,
         path_to_small_language_model=None,
         path_to_large_language_model=None,
@@ -126,6 +151,7 @@ class EfficientSoftCoTFromSmallModel(SoftCoTAbstractClass):
             num_thought_tokens=num_thought_tokens,
             tune_assistant_model=tune_assistant_model,
             tune_base_model=tune_base_model,
+            lora_config=lora_config,
         )
 
         if path_to_projection_module is not None and path_to_projection_module not in ['None']:
