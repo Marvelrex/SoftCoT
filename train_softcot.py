@@ -1,4 +1,6 @@
 import argparse
+import random
+import numpy as np
 from tqdm import tqdm
 
 import torch
@@ -55,6 +57,15 @@ save_model_dir = f'./ckpt/{output_name}-{post_fix}'
 logger.info(f'Output Dir: {output_dir}')
 logger.info(f'Log Dir: {log_dir}')
 logger.info(f'Save Model Dir: {save_model_dir}')
+
+# Fixed global seed for reproducibility
+seed = 42
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 model_dtype = torch.bfloat16
 param_dtype = str(model_dtype)

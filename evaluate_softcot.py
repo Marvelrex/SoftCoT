@@ -1,6 +1,8 @@
 
 import re
 import argparse
+import json
+from pathlib import Path
 
 from tqdm import tqdm
 import torch
@@ -31,6 +33,11 @@ args.add_argument('--test_k', type=int, default=0)
 args.add_argument('--seed', type=int, default=42)
 args.add_argument('--tune_base_model', action='store_true', default=False)
 args.add_argument('--tune_assistant_model', action='store_true', default=False)
+args.add_argument('--pred_file', type=str, default=None,
+                  help='Optional path to save predictions as JSONL; if omitted, no file is written.')
+args.add_argument('--do_sample', dest='do_sample', action='store_true', help='Enable sampling in generation.')
+args.add_argument('--no_do_sample', dest='do_sample', action='store_false', help='Disable sampling in generation (default).')
+args.set_defaults(do_sample=False)
 arg = args.parse_args()
 logger.info(f'Args: {arg.__dict__}')
 
@@ -48,6 +55,8 @@ test_k = arg.test_k
 seed = arg.seed
 tune_base_model = arg.tune_base_model
 tune_assistant_model = arg.tune_assistant_model
+pred_file = Path(arg.pred_file) if arg.pred_file else None
+do_sample = arg.do_sample
 
 large_model_name = base_model_id.split('/')[-1]
 small_model_name = assistant_model_id.split('/')[-1]
@@ -129,6 +138,7 @@ generation_config.top_p = 1.0
 generation_config.temperature = 1.0
 
 correct_count = 0
+predictions = []
 for idx, ins in enumerate(tqdm(ds)):
 
     torch.manual_seed(seed)
@@ -199,7 +209,7 @@ for idx, ins in enumerate(tqdm(ds)):
         attention_mask=inputs['attention_mask'],
         max_new_tokens=1024,
         eos_token_id=terminators,
-        do_sample=True,
+        do_sample=do_sample,
         generation_config=generation_config,
         num_return_sequences=num_return_sequences,
     )
@@ -285,3 +295,21 @@ for idx, ins in enumerate(tqdm(ds)):
         correct_count += 1
     logger.info(f'Correct Count: {correct_count}/{idx + 1}')
     logger.info(f'{"-" * 20}')
+
+    # Save row for optional JSONL output
+    if pred_file:
+        predictions.append({
+            "index": ins.get("index", idx),
+            "question": ins.get("question", None),
+            "gold_answer": answer,
+            "model_answer": final_model_answer,
+            "raw_generation": raw_model_answer,
+            "is_correct": is_correct,
+        })
+
+if pred_file:
+    pred_file.parent.mkdir(parents=True, exist_ok=True)
+    with pred_file.open("w", encoding="utf-8") as f:
+        for row in predictions:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    logger.info(f'Saved {len(predictions)} predictions to {pred_file}')
