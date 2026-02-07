@@ -2,6 +2,7 @@
 import re
 import argparse
 import json
+import os
 from pathlib import Path
 
 from tqdm import tqdm
@@ -69,8 +70,12 @@ if assistant_model_ckpt in ['None']:
 model_dtype = torch.bfloat16
 param_dtype = str(model_dtype)
 
-base_tokenizer = AutoTokenizer.from_pretrained(base_model_id, token='your-huggingface-token')
-assistant_tokenizer = AutoTokenizer.from_pretrained(assistant_model_id, token='your-huggingface-token')
+hf_token = os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_HUB_TOKEN')
+if hf_token is None:
+    logger.warning('HF_TOKEN/HUGGINGFACE_HUB_TOKEN not set; gated models may 401.')
+
+base_tokenizer = AutoTokenizer.from_pretrained(base_model_id, token=hf_token)
+assistant_tokenizer = AutoTokenizer.from_pretrained(assistant_model_id, token=hf_token)
 
 if 'Llama' in base_model_id:
     base_special_token = ['<|end_of_text|>', '<|reserved_special_token_0|>', '<|reserved_special_token_1|>']
@@ -127,7 +132,7 @@ ds = db.get_dataset('test')
 if test_k > 0:
     ds = ds[: test_k]
 
-generation_config = GenerationConfig.from_pretrained(base_model_id)
+generation_config = GenerationConfig.from_pretrained(base_model_id, token=hf_token)
 if base_backbone in ['llama']:
     generation_config.pad_token_id = 128009
 elif base_backbone in ['qwen']:

@@ -25,32 +25,35 @@ class SoftCoTAbstractClass(nn.Module):
         **kwargs,
     ):
         super().__init__()
+        self.hf_token = os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_HUB_TOKEN')
+        if self.hf_token is None:
+            logger.warning('HF_TOKEN/HUGGINGFACE_HUB_TOKEN not set; gated models may 401.')
         self.assistant_model = AutoModelForCausalLM.from_pretrained(
             small_language_model_id,
             torch_dtype=torch.bfloat16,
             device_map='auto',
             _fast_init=False,
-            token='your-huggingface-token',
+            token=self.hf_token,
         )
         self.base_model = AutoModelForCausalLM.from_pretrained(
             large_language_model_id,
             torch_dtype=torch.bfloat16,
             device_map='auto',
             _fast_init=False,
-            token='your-huggingface-token',
+            token=self.hf_token,
         )
         self.config = AutoConfig.from_pretrained(
             large_language_model_id,
-            token='your-huggingface-token',
+            token=self.hf_token,
         )
 
         self.base_tokenizer = AutoTokenizer.from_pretrained(
             large_language_model_id,
-            token='your-huggingface-token',
+            token=self.hf_token,
         )
         self.assistant_tokenizer = AutoTokenizer.from_pretrained(
             small_language_model_id,
-            token='your-huggingface-token',
+            token=self.hf_token,
         )
 
         self.num_thought_tokens = num_thought_tokens

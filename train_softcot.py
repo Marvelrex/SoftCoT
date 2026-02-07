@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 import numpy as np
 from tqdm import tqdm
@@ -70,8 +71,12 @@ torch.backends.cudnn.benchmark = False
 model_dtype = torch.bfloat16
 param_dtype = str(model_dtype)
 
-base_tokenizer = AutoTokenizer.from_pretrained(large_model_id, token='your-huggingface-token')
-assistant_tokenizer = AutoTokenizer.from_pretrained(small_model_id, token='your-huggingface-token')
+hf_token = os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_HUB_TOKEN')
+if hf_token is None:
+    logger.warning('HF_TOKEN/HUGGINGFACE_HUB_TOKEN not set; gated models may 401.')
+
+base_tokenizer = AutoTokenizer.from_pretrained(large_model_id, token=hf_token)
+assistant_tokenizer = AutoTokenizer.from_pretrained(small_model_id, token=hf_token)
 
 if 'Llama' in large_model_id:
     base_special_token = ['<|end_of_text|>', '<|reserved_special_token_0|>', '<|reserved_special_token_1|>']
