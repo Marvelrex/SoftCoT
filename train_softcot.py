@@ -51,9 +51,12 @@ tune_assistant_model = arg.tune_assistant_model
 large_model_name = large_model_id.split('/')[-1]
 small_model_name = small_model_id.split('/')[-1]
 post_fix = f'{task_name}-{n_epochs}-{num_thought_tokens}-{large_model_name}-{small_model_name}'
-output_dir = f'./results/{output_name}-{post_fix}'
-log_dir = f'./logs/{output_name}-{post_fix}'
-save_model_dir = f'./ckpt/{output_name}-{post_fix}'
+results_root = os.getenv('SOFTCOT_RESULTS_DIR', './results')
+logs_root = os.getenv('SOFTCOT_LOGS_DIR', './logs')
+ckpt_root = os.getenv('SOFTCOT_CKPT_DIR', './ckpt')
+output_dir = os.path.join(results_root, f'{output_name}-{post_fix}')
+log_dir = os.path.join(logs_root, f'{output_name}-{post_fix}')
+save_model_dir = os.path.join(ckpt_root, f'{output_name}-{post_fix}')
 
 logger.info(f'Output Dir: {output_dir}')
 logger.info(f'Log Dir: {log_dir}')
@@ -186,12 +189,12 @@ training_args = TrainingArguments(
     output_dir=output_dir,
     overwrite_output_dir=True,
     eval_strategy='epoch',
-    save_strategy='epoch',
+    # Avoid huge trainer checkpoints for this composite model.
+    save_strategy='no',
     learning_rate=2e-5,
     per_device_train_batch_size=batch_size,
     per_device_eval_batch_size=batch_size,
     num_train_epochs=n_epochs,
-    save_total_limit=10 if task_name in ['gsm8k', 'aqua'] else 2,
     bf16=True,
     logging_dir=log_dir,
     logging_steps=500,
