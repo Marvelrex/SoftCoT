@@ -97,6 +97,9 @@ TUNE_BASE="${TUNE_BASE:-false}"            # set true to also LoRA-tune the base
 RUNS="${RUNS:-10}"
 OUTPUT_BASE="${OUTPUT_NAME}"
 
+# Match train_softcot.py folder naming, where n_epochs is parsed as float then stringified (e.g., 2 -> 2.0).
+N_EPOCHS_TAG="$(python -c "print(float('${N_EPOCHS}'))")"
+
 ASSIST_TUNE_FLAG=()
 BASE_TUNE_FLAG=()
 BF16_FLAG=(--bf16)
@@ -123,7 +126,7 @@ for i in $(seq 1 "$RUNS"); do
   OUTPUT_NAME_RUN="${OUTPUT_BASE}-${RUN_TAG}"
 
   # Derived checkpoint path (matches train_softcot.py naming)
-  CKPT_DIR="$CKPT_BASE/${OUTPUT_NAME_RUN}-${TASK_NAME}-${N_EPOCHS}-${NUM_THOUGHT_TOKENS}-${BASE_MODEL_NAME}-${ASSIST_MODEL_NAME}"
+  CKPT_DIR="$CKPT_BASE/${OUTPUT_NAME_RUN}-${TASK_NAME}-${N_EPOCHS_TAG}-${NUM_THOUGHT_TOKENS}-${BASE_MODEL_NAME}-${ASSIST_MODEL_NAME}"
   PROJ_BIN="$CKPT_DIR/projection.bin"
 
   RUN_PRED_DIR="$PRED_BASE/${RUN_TAG}"
