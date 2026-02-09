@@ -73,8 +73,21 @@ PRED_BASE="${PRED_BASE:-$PROJECT_ROOT/outputs}"
 
 # Training hyperparameters
 OUTPUT_NAME="${OUTPUT_NAME:-softcot-run}"
-BATCH_SIZE="${BATCH_SIZE:-1}"
-N_EPOCHS="${N_EPOCHS:-3}"
+BATCH_SIZE="${BATCH_SIZE:-2}"
+N_EPOCHS="${N_EPOCHS:-2}"
+LEARNING_RATE="${LEARNING_RATE:-0.0001}"
+WEIGHT_DECAY="${WEIGHT_DECAY:-0.01}"
+GRAD_ACCUM="${GRAD_ACCUM:-8}"
+WARMUP_RATIO="${WARMUP_RATIO:-0.03}"
+LOGGING_STEPS="${LOGGING_STEPS:-25}"
+SAVE_STEPS="${SAVE_STEPS:-250}"
+OPTIM="${OPTIM:-adamw_torch}"
+LR_SCHEDULER_TYPE="${LR_SCHEDULER_TYPE:-linear}"
+MAX_GRAD_NORM="${MAX_GRAD_NORM:-1.0}"
+MAX_LENGTH="${MAX_LENGTH:-2048}"
+MAX_SAMPLES="${MAX_SAMPLES:-}"
+BF16="${BF16:-true}"
+PAD_TO_MAX="${PAD_TO_MAX:-false}"
 TUNE_ASSISTANT="${TUNE_ASSISTANT:-true}"   # set to false to skip LoRA on assistant
 TUNE_BASE="${TUNE_BASE:-false}"            # set true to also LoRA-tune the base model
 RUNS="${RUNS:-10}"
@@ -82,11 +95,23 @@ OUTPUT_BASE="${OUTPUT_NAME}"
 
 ASSIST_TUNE_FLAG=()
 BASE_TUNE_FLAG=()
+BF16_FLAG=(--bf16)
+PAD_FLAG=(--no_pad_to_max)
+MAX_SAMPLES_ARG=()
 if [[ "${TUNE_ASSISTANT,,}" == "true" || "${TUNE_ASSISTANT}" == "1" ]]; then
   ASSIST_TUNE_FLAG+=(--tune_assistant_model)
 fi
 if [[ "${TUNE_BASE,,}" == "true" || "${TUNE_BASE}" == "1" ]]; then
   BASE_TUNE_FLAG+=(--tune_base_model)
+fi
+if [[ "${BF16,,}" == "false" || "${BF16}" == "0" ]]; then
+  BF16_FLAG=(--no_bf16)
+fi
+if [[ "${PAD_TO_MAX,,}" == "true" || "${PAD_TO_MAX}" == "1" ]]; then
+  PAD_FLAG=(--pad_to_max)
+fi
+if [[ -n "${MAX_SAMPLES}" ]]; then
+  MAX_SAMPLES_ARG=(--max_samples "$MAX_SAMPLES")
 fi
 
 for i in $(seq 1 "$RUNS"); do
@@ -108,7 +133,21 @@ for i in $(seq 1 "$RUNS"); do
     --batch_size "$BATCH_SIZE" \
     --num_thought_tokens "$NUM_THOUGHT_TOKENS" \
     --n_epochs "$N_EPOCHS" \
+    --learning_rate "$LEARNING_RATE" \
+    --weight_decay "$WEIGHT_DECAY" \
+    --grad_accum "$GRAD_ACCUM" \
+    --warmup_ratio "$WARMUP_RATIO" \
+    --logging_steps "$LOGGING_STEPS" \
+    --save_steps "$SAVE_STEPS" \
+    --optim "$OPTIM" \
+    --lr_scheduler_type "$LR_SCHEDULER_TYPE" \
+    --max_grad_norm "$MAX_GRAD_NORM" \
+    --seed "$SEED" \
+    --max_length "$MAX_LENGTH" \
     --k_shot "$K_SHOT" \
+    "${MAX_SAMPLES_ARG[@]}" \
+    "${BF16_FLAG[@]}" \
+    "${PAD_FLAG[@]}" \
     "${ASSIST_TUNE_FLAG[@]}" \
     "${BASE_TUNE_FLAG[@]}"
 

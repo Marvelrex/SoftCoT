@@ -23,13 +23,31 @@ args = argparse.ArgumentParser()
 args.add_argument('--large_model_id', type=str, default='meta-llama/Llama-3.1-8B-Instruct')
 args.add_argument('--small_model_id', type=str, default='meta-llama/Llama-3.2-1B-Instruct')
 args.add_argument('--output_name', type=str, required=True)
-args.add_argument('--batch_size', type=int, default=1)
+args.add_argument('--batch_size', type=int, default=2)
 args.add_argument('--task_name', type=str, choices=[
     'gsm8k', 'strategyqa', 'asdiv-aug', 'aqua',
 ])
 args.add_argument('--num_thought_tokens', type=int, default=2)
-args.add_argument('--n_epochs', type=float, default=3.0)
+args.add_argument('--n_epochs', type=float, default=2.0)
 args.add_argument('--k_shot', type=int, default=0)
+args.add_argument('--learning_rate', type=float, default=1e-4)
+args.add_argument('--weight_decay', type=float, default=0.01)
+args.add_argument('--grad_accum', type=int, default=8)
+args.add_argument('--warmup_ratio', type=float, default=0.03)
+args.add_argument('--logging_steps', type=int, default=25)
+args.add_argument('--save_steps', type=int, default=250)
+args.add_argument('--optim', type=str, default='adamw_torch')
+args.add_argument('--lr_scheduler_type', type=str, default='linear')
+args.add_argument('--max_grad_norm', type=float, default=1.0)
+args.add_argument('--seed', type=int, default=42)
+args.add_argument('--max_length', type=int, default=2048)
+args.add_argument('--max_samples', type=int, default=None)
+args.add_argument('--bf16', dest='bf16', action='store_true')
+args.add_argument('--no_bf16', dest='bf16', action='store_false')
+args.set_defaults(bf16=True)
+args.add_argument('--pad_to_max', dest='pad_to_max', action='store_true')
+args.add_argument('--no_pad_to_max', dest='pad_to_max', action='store_false')
+args.set_defaults(pad_to_max=False)
 args.add_argument('--tune_base_model', action='store_true', default=False)
 args.add_argument('--tune_assistant_model', action='store_true', default=False)
 arg = args.parse_args()
@@ -44,6 +62,20 @@ task_name = arg.task_name
 n_epochs = arg.n_epochs
 num_thought_tokens = arg.num_thought_tokens
 k_shot = arg.k_shot
+learning_rate = arg.learning_rate
+weight_decay = arg.weight_decay
+grad_accum = arg.grad_accum
+warmup_ratio = arg.warmup_ratio
+logging_steps = arg.logging_steps
+save_steps = arg.save_steps
+optim = arg.optim
+lr_scheduler_type = arg.lr_scheduler_type
+max_grad_norm = arg.max_grad_norm
+seed = arg.seed
+max_length = arg.max_length
+max_samples = arg.max_samples
+bf16 = arg.bf16
+pad_to_max = arg.pad_to_max
 tune_base_model = arg.tune_base_model
 tune_assistant_model = arg.tune_assistant_model
 
@@ -63,7 +95,6 @@ logger.info(f'Log Dir: {log_dir}')
 logger.info(f'Save Model Dir: {save_model_dir}')
 
 # Fixed global seed for reproducibility
-seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
@@ -155,6 +186,8 @@ eval_dataset = db.get_dataset('dev')
 
 if k_shot > 0:
     train_dataset = train_dataset[: k_shot]
+if max_samples is not None:
+    train_dataset = train_dataset[: max_samples]
 
 train_rows = []
 for ins in tqdm(train_dataset, desc='Preprocess Training Set'):
@@ -166,6 +199,7 @@ for ins in tqdm(train_dataset, desc='Preprocess Training Set'):
             assistant_special_token=assistant_special_token,
             base_backbone=base_backbone,
             assistant_backbone=assistant_backbone,
+            max_len=max_length,
         )
     )
 
@@ -179,6 +213,7 @@ for ins in tqdm(eval_dataset, desc='Preprocess Testing Set'):
             assistant_special_token=assistant_special_token,
             base_backbone=base_backbone,
             assistant_backbone=assistant_backbone,
+            max_len=max_length,
         )
     )
 
@@ -189,15 +224,21 @@ training_args = TrainingArguments(
     output_dir=output_dir,
     overwrite_output_dir=True,
     eval_strategy='epoch',
-    # Avoid huge trainer checkpoints for this composite model.
-    save_strategy='no',
-    learning_rate=2e-5,
+    save_strategy='steps',
+    save_steps=save_steps,
+    learning_rate=learning_rate,
+    weight_decay=weight_decay,
     per_device_train_batch_size=batch_size,
     per_device_eval_batch_size=batch_size,
+    gradient_accumulation_steps=grad_accum,
+    warmup_ratio=warmup_ratio,
     num_train_epochs=n_epochs,
-    bf16=True,
+    optim=optim,
+    bf16=bf16,
+    lr_scheduler_type=lr_scheduler_type,
+    max_grad_norm=max_grad_norm,
     logging_dir=log_dir,
-    logging_steps=500,
+    logging_steps=logging_steps,
     remove_unused_columns=True,
     save_safetensors=False,
 )
@@ -207,7 +248,10 @@ trainer = Trainer(
     args=training_args,
     train_dataset=train_data,
     eval_dataset=eval_data,
-    data_collator=CustomDataCollator(),
+    data_collator=CustomDataCollator(
+        pad_to_max=pad_to_max,
+        max_length=max_length,
+    ),
 )
 trainer.train()
 

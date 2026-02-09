@@ -120,6 +120,7 @@ def pre_process_strategy_qa(
     else:
         raise NotImplementedError
 
+    pure_input_length = min(pure_input_length, len(input_ids))
     attention_mask = [1] * len(input_ids)
 
     assistant_template = (f'You are required to generate {num_thought_tokens} tokens to help another language model '
@@ -550,6 +551,7 @@ def pre_process_aqua(
             pure_input_length = len(pure_input_ids)
     else:
         raise NotImplementedError
+    pure_input_length = min(pure_input_length, len(input_ids))
     attention_mask = [1] * len(input_ids)
 
     if assistant_backbone in ['llama']:
@@ -863,6 +865,10 @@ def pre_process_du(
 
 class CustomDataCollator:
 
+    def __init__(self, pad_to_max: bool = False, max_length: int = 2048):
+        self.pad_to_max = pad_to_max
+        self.max_length = max_length
+
     def __call__(self, batch: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         input_ids = [item['input_ids'] for item in batch]
         attention_masks = [item['attention_mask'] for item in batch]
@@ -873,6 +879,13 @@ class CustomDataCollator:
 
         input_max_length = max([len(item) for item in input_ids])
         assistant_max_length = max([len(item) for item in assistant_input_ids])
+        if self.max_length is not None and self.max_length > 0:
+            if self.pad_to_max:
+                input_max_length = self.max_length
+                assistant_max_length = self.max_length
+            else:
+                input_max_length = min(input_max_length, self.max_length)
+                assistant_max_length = min(assistant_max_length, self.max_length)
 
         input_ids = [(ids + [0] * input_max_length)[:input_max_length] for ids in input_ids]
         attention_masks = [(am + [0] * input_max_length)[:input_max_length] for am in attention_masks]
