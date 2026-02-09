@@ -303,9 +303,17 @@ for idx, ins in enumerate(tqdm(ds)):
 
     # Save row for optional JSONL output
     if pred_file:
+        try:
+            ins_index = ins['index']
+        except Exception:
+            ins_index = idx
+        try:
+            ins_question = ins['question']
+        except Exception:
+            ins_question = None
         predictions.append({
-            "index": ins.get("index", idx),
-            "question": ins.get("question", None),
+            "index": ins_index,
+            "question": ins_question,
             "gold_answer": answer,
             "model_answer": final_model_answer,
             "raw_generation": raw_model_answer,
