@@ -3,6 +3,7 @@ import re
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from tqdm import tqdm
@@ -144,7 +145,8 @@ generation_config.temperature = 1.0
 
 correct_count = 0
 predictions = []
-for idx, ins in enumerate(tqdm(ds)):
+show_progress = sys.stderr.isatty() and os.getenv('TQDM_DISABLE', '0') not in {'1', 'true', 'TRUE', 'yes', 'YES'}
+for idx, ins in enumerate(tqdm(ds, disable=not show_progress)):
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)

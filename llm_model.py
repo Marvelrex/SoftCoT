@@ -109,19 +109,30 @@ class SoftCoTAbstractClass(nn.Module):
     def device(self):
         return self.base_model.device
 
+    @staticmethod
+    def _trainable_state_dict(module: nn.Module):
+        trainable = {name for name, p in module.named_parameters() if p.requires_grad}
+        full_state = module.state_dict()
+        # For LoRA tuning this keeps adapter weights only, which is much smaller than full model checkpoints.
+        return {k: v for k, v in full_state.items() if k in trainable}
+
     def save_pretrained(self, save_model_dir_root: str, **kwargs):
         save_detail = []
         os.makedirs(save_model_dir_root, exist_ok=True)
         if self.tune_base_model:
             base_model_file = os.path.join(save_model_dir_root, 'base_model.bin')
             logger.info(f'Saving base model to `{base_model_file}`')
-            torch.save(self.base_model.state_dict(), base_model_file)
+            base_state = self._trainable_state_dict(self.base_model)
+            logger.info(f'Saving {len(base_state)} trainable tensors for base model.')
+            torch.save(base_state, base_model_file)
             save_detail.append('Base Model')
 
         if self.tune_assistant_model:
             assistant_model_file = os.path.join(save_model_dir_root, 'assistant_model.bin')
             logger.info(f'Saving assistant model to `{assistant_model_file}`')
-            torch.save(self.assistant_model.state_dict(), assistant_model_file)
+            assistant_state = self._trainable_state_dict(self.assistant_model)
+            logger.info(f'Saving {len(assistant_state)} trainable tensors for assistant model.')
+            torch.save(assistant_state, assistant_model_file)
             save_detail.append('Assistant Model')
 
         torch.save(self.projection.state_dict(), os.path.join(save_model_dir_root, 'projection.bin'))
@@ -165,12 +176,26 @@ class EfficientSoftCoTFromSmallModel(SoftCoTAbstractClass):
 
         device = self.device
         if path_to_small_language_model is not None and path_to_small_language_model not in ['None']:
-            self.assistant_model.load_state_dict(torch.load(path_to_small_language_model, weights_only=True))
+            load_result = self.assistant_model.load_state_dict(
+                torch.load(path_to_small_language_model, weights_only=True),
+                strict=False,
+            )
             logger.info(f'Load weights from file `{path_to_small_language_model}` for assistant model.')
+            logger.info(
+                f'Assistant load_state_dict(strict=False): '
+                f'missing={len(load_result.missing_keys)}, unexpected={len(load_result.unexpected_keys)}'
+            )
             self.assistant_model.to(device)
         if path_to_large_language_model is not None and path_to_large_language_model not in ['None']:
-            self.base_model.load_state_dict(torch.load(path_to_large_language_model, weights_only=True))
+            load_result = self.base_model.load_state_dict(
+                torch.load(path_to_large_language_model, weights_only=True),
+                strict=False,
+            )
             logger.info(f'Load weights from file `{path_to_large_language_model}` for base model.')
+            logger.info(
+                f'Base load_state_dict(strict=False): '
+                f'missing={len(load_result.missing_keys)}, unexpected={len(load_result.unexpected_keys)}'
+            )
             self.base_model.to(device)
 
     def forward(

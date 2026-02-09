@@ -42,8 +42,10 @@ PY
 
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 export PYTORCH_ALLOC_CONF=expandable_segments:True
+export TQDM_DISABLE="${TQDM_DISABLE:-1}"
 
 PROJECT_ROOT="${PROJECT_ROOT:-${SLURM_SUBMIT_DIR:-/home/jyang001/jyang001/projects/SoftCoT}}"
+HOME_PROJECT_ROOT="${HOME_PROJECT_ROOT:-/home/jyang001/jyang001/projects/SoftCoT}"
 SCRATCH_ROOT="${SCRATCH_ROOT:-/home/jyang001/scratch}"
 CKPT_BASE="${CKPT_BASE:-$SCRATCH_ROOT/SoftCoT}"
 RESULTS_BASE="${RESULTS_BASE:-$SCRATCH_ROOT/SoftCoT/results}"
@@ -69,7 +71,8 @@ NUM_THOUGHT_TOKENS="${NUM_THOUGHT_TOKENS:-2}"
 TEST_K="${TEST_K:-0}"            # 0 = full test set
 K_SHOT="${K_SHOT:-0}"            # 0 = full train set
 SEED="${SEED:-42}"
-PRED_BASE="${PRED_BASE:-$PROJECT_ROOT/outputs}"
+# Keep evaluation outputs on home project storage by default.
+PRED_BASE="${PRED_BASE:-$HOME_PROJECT_ROOT/outputs}"
 
 # Training hyperparameters
 OUTPUT_NAME="${OUTPUT_NAME:-softcot-run}"

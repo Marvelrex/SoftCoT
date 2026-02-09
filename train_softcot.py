@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import sys
 import numpy as np
 from tqdm import tqdm
 
@@ -192,7 +193,8 @@ if max_samples is not None:
     train_dataset = train_dataset[: max_samples]
 
 train_rows = []
-for ins in tqdm(train_dataset, desc='Preprocess Training Set'):
+show_progress = sys.stderr.isatty() and os.getenv('TQDM_DISABLE', '0') not in {'1', 'true', 'TRUE', 'yes', 'YES'}
+for ins in tqdm(train_dataset, desc='Preprocess Training Set', disable=not show_progress):
     train_rows.append(
         preprocess_method(
             ins, base_tokenizer, assistant_tokenizer, num_thought_tokens,
@@ -206,7 +208,7 @@ for ins in tqdm(train_dataset, desc='Preprocess Training Set'):
     )
 
 eval_rows = []
-for ins in tqdm(eval_dataset, desc='Preprocess Testing Set'):
+for ins in tqdm(eval_dataset, desc='Preprocess Testing Set', disable=not show_progress):
     eval_rows.append(
         preprocess_method(
             ins, base_tokenizer, assistant_tokenizer, num_thought_tokens,
@@ -241,6 +243,7 @@ training_args = TrainingArguments(
     max_grad_norm=max_grad_norm,
     logging_dir=log_dir,
     logging_steps=logging_steps,
+    disable_tqdm=not show_progress,
     remove_unused_columns=True,
     save_safetensors=False,
 )
