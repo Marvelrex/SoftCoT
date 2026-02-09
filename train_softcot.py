@@ -74,6 +74,14 @@ param_dtype = str(model_dtype)
 hf_token = os.getenv('HF_TOKEN') or os.getenv('HUGGINGFACE_HUB_TOKEN')
 if hf_token is None:
     logger.warning('HF_TOKEN/HUGGINGFACE_HUB_TOKEN not set; gated models may 401.')
+else:
+    logger.info(f'HF token detected; prefix={hf_token[:8]}')
+    try:
+        from huggingface_hub import HfApi
+        sha = HfApi(token=hf_token).model_info(small_model_id, timeout=10).sha
+        logger.info(f'HF access check ok; sha={sha}')
+    except Exception as e:
+        logger.error(f'HF access check failed: {e}')
 
 base_tokenizer = AutoTokenizer.from_pretrained(large_model_id, token=hf_token)
 assistant_tokenizer = AutoTokenizer.from_pretrained(small_model_id, token=hf_token)
