@@ -81,6 +81,7 @@ GRAD_ACCUM="${GRAD_ACCUM:-8}"
 WARMUP_RATIO="${WARMUP_RATIO:-0.03}"
 LOGGING_STEPS="${LOGGING_STEPS:-25}"
 SAVE_STEPS="${SAVE_STEPS:-250}"
+SAVE_STRATEGY="${SAVE_STRATEGY:-steps}"
 OPTIM="${OPTIM:-adamw_torch}"
 LR_SCHEDULER_TYPE="${LR_SCHEDULER_TYPE:-linear}"
 MAX_GRAD_NORM="${MAX_GRAD_NORM:-1.0}"
@@ -139,6 +140,7 @@ for i in $(seq 1 "$RUNS"); do
     --warmup_ratio "$WARMUP_RATIO" \
     --logging_steps "$LOGGING_STEPS" \
     --save_steps "$SAVE_STEPS" \
+    --save_strategy "$SAVE_STRATEGY" \
     --optim "$OPTIM" \
     --lr_scheduler_type "$LR_SCHEDULER_TYPE" \
     --max_grad_norm "$MAX_GRAD_NORM" \

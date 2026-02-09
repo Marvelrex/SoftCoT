@@ -36,6 +36,7 @@ args.add_argument('--grad_accum', type=int, default=8)
 args.add_argument('--warmup_ratio', type=float, default=0.03)
 args.add_argument('--logging_steps', type=int, default=25)
 args.add_argument('--save_steps', type=int, default=250)
+args.add_argument('--save_strategy', type=str, default='steps', choices=['no', 'steps', 'epoch'])
 args.add_argument('--optim', type=str, default='adamw_torch')
 args.add_argument('--lr_scheduler_type', type=str, default='linear')
 args.add_argument('--max_grad_norm', type=float, default=1.0)
@@ -68,6 +69,7 @@ grad_accum = arg.grad_accum
 warmup_ratio = arg.warmup_ratio
 logging_steps = arg.logging_steps
 save_steps = arg.save_steps
+save_strategy = arg.save_strategy
 optim = arg.optim
 lr_scheduler_type = arg.lr_scheduler_type
 max_grad_norm = arg.max_grad_norm
@@ -224,7 +226,7 @@ training_args = TrainingArguments(
     output_dir=output_dir,
     overwrite_output_dir=True,
     eval_strategy='epoch',
-    save_strategy='steps',
+    save_strategy=save_strategy,
     save_steps=save_steps,
     learning_rate=learning_rate,
     weight_decay=weight_decay,
