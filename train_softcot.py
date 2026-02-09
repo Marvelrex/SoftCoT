@@ -196,6 +196,7 @@ training_args = TrainingArguments(
     logging_dir=log_dir,
     logging_steps=500,
     remove_unused_columns=True,
+    save_safetensors=False,
 )
 
 trainer = Trainer(
