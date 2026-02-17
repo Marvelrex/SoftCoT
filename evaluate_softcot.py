@@ -18,6 +18,66 @@ from data_loader import GSM8KLoader, StrategyQALoader, AugASDivLoader, AQuALoade
 from utils import pre_process_gsm8k, pre_process_strategy_qa, pre_process_aqua, pre_process_du
 
 
+def _normalize_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {'true', 'yes', '1'}:
+            return True
+        if lowered in {'false', 'no', '0'}:
+            return False
+    return value
+
+
+def _extract_option_letter(value, valid_letters='ABCDEF'):
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.startswith('####'):
+        text = text[4:].strip()
+
+    if len(text) == 1 and text.upper() in valid_letters:
+        return text.upper()
+
+    patterns = [
+        rf'(?i)####\s*([{re.escape(valid_letters)}])\b',
+        rf'(?i)(?:final\s+answer|answer)\s*(?:is|:)?\s*(?:\\boxed\{{)?\s*([{re.escape(valid_letters)}])\s*(?:\}})?',
+        rf'(?i)\b(?:option|choice)\s*([{re.escape(valid_letters)}])\b',
+        rf'(?i)\b([{re.escape(valid_letters)}])\b(?=[^A-Za-z]*$)',
+    ]
+    for pattern in patterns:
+        matches = list(re.finditer(pattern, text))
+        if matches:
+            return matches[-1].group(1).upper()
+    return None
+
+
+def _extract_model_option(raw_text, valid_letters='ABCDEF'):
+    if raw_text is None:
+        return None
+
+    anchored_patterns = [
+        rf'(?i)(?:final\s+answer|answer)\s*(?:is|:)?\s*(?:\\boxed\{{)?\s*([{re.escape(valid_letters)}])\s*(?:\}})?',
+        rf'(?i)\b(?:option|choice)\s*([{re.escape(valid_letters)}])\b',
+    ]
+
+    for pattern in anchored_patterns:
+        matches = list(re.finditer(pattern, raw_text))
+        if matches:
+            return matches[-1].group(1).upper()
+
+    fallback = list(re.finditer(rf'(?i)\b([{re.escape(valid_letters)}])\b(?=[^A-Za-z]*$)', raw_text))
+    if fallback:
+        return fallback[-1].group(1).upper()
+    return None
+
+
 args = argparse.ArgumentParser()
 args.add_argument('--base_model_id', type=str, default='meta-llama/Llama-3.1-8B-Instruct')
 args.add_argument('--assistant_model_id', type=str, default='meta-llama/Llama-3.2-1B-Instruct')
@@ -151,7 +211,7 @@ for idx, ins in enumerate(tqdm(ds, disable=not show_progress)):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-    if task_name in ['gsm8k', 'asdiv-aug', 'aqua']:
+    if task_name in ['gsm8k', 'asdiv-aug']:
         answer = ins['answer'].split('\n')[-1]
         assert answer.startswith('####')
         answer = answer.replace(',', '')
@@ -160,10 +220,20 @@ for idx, ins in enumerate(tqdm(ds, disable=not show_progress)):
                 answer = float(answer[4:])
             else:
                 answer = int(answer[4:])
-        else:
-            answer = answer[4:].strip()
-    elif task_name in ['strategyqa', 'du']:
-        answer = ins['answer']
+    elif task_name in ['aqua']:
+        answer = (
+            _extract_option_letter(ins.get('answer'), valid_letters='ABCDE')
+            or _extract_option_letter(ins.get('gold'), valid_letters='ABCDE')
+            or _extract_option_letter(ins.get('answer_from_dataset'), valid_letters='ABCDE')
+        )
+        if answer is None:
+            raise ValueError(f'Cannot parse AQuA gold answer for item index={idx}: {ins}')
+    elif task_name in ['strategyqa']:
+        answer = _normalize_bool(ins.get('answer'))
+    elif task_name in ['du']:
+        answer = _extract_option_letter(ins.get('answer'), valid_letters='ABCDEF')
+        if answer is None:
+            raise ValueError(f'Cannot parse DU gold answer for item index={idx}: {ins}')
     else:
         raise NotImplementedError
 
@@ -271,12 +341,10 @@ for idx, ins in enumerate(tqdm(ds, disable=not show_progress)):
                 model_answer = None
             else:
                 model_answer = last_yes < last_no
-        elif task_name in ['aqua', 'du']:
-            m_answer = re.search(r'\b[a-f]\b', raw_model_answer.lower()[::-1])
-            if m_answer is not None:
-                model_answer = m_answer.group(0).upper()
-            else:
-                model_answer = None
+        elif task_name in ['aqua']:
+            model_answer = _extract_model_option(raw_model_answer, valid_letters='ABCDE')
+        elif task_name in ['du']:
+            model_answer = _extract_model_option(raw_model_answer, valid_letters='ABCDEF')
         else:
             raise NotImplementedError
 

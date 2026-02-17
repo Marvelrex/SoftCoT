@@ -38,13 +38,27 @@ def pre_process_strategy_qa(
 
     assistant_unk_token, assistant_bot_token, assistant_eot_token = assistant_special_token
 
-    answer = 'Yes' if instance['answer'] else 'No'
-    reasoning_list = instance['facts']
+    answer_value = instance.get('answer')
+    if isinstance(answer_value, str):
+        lowered = answer_value.strip().lower()
+        if lowered in {'true', 'yes', '1'}:
+            answer_value = True
+        elif lowered in {'false', 'no', '0'}:
+            answer_value = False
+    answer = 'Yes' if bool(answer_value) else 'No'
+
+    reasoning_list = instance.get('facts', [])
+    if isinstance(reasoning_list, str):
+        reasoning_list = [reasoning_list]
+    elif not isinstance(reasoning_list, list):
+        reasoning_list = []
+
+    question = instance.get('question', '')
 
     thought_tokens = base_unk_token * num_thought_tokens
     soft_thoughts = f'{base_bot_token}{thought_tokens}{base_eot_token}'
 
-    input_content = f'You are required to answer the following question with `Yes` or `No`: {instance["question"]}\n\n'
+    input_content = f'You are required to answer the following question with `Yes` or `No`: {question}\n\n'
     if num_thought_tokens > 0:
         input_content += f'Here are something useful for your reasoning: {soft_thoughts}\n\n'
     input_content += f'Therefore, the final answer is `Yes` or `No`?'
@@ -55,7 +69,7 @@ def pre_process_strategy_qa(
         target_content = ''
 
     if split in ['train', 'dev']:
-        target_content += (f'OK. The question is {instance["question"]}\n\n'
+        target_content += (f'OK. The question is {question}\n\n'
                            f'Now let\'s start reasoning according to the following facts:\n')
     else:
         target_content += ''
@@ -132,7 +146,7 @@ def pre_process_strategy_qa(
                           f'- The tokens should be useful for large language model to answer the question with '
                           f'`Yes` or `No`.\n'
                           f'...\n\n'
-                          f'Here is the problem: {instance["question"]}')
+                          f'Here is the problem: {question}')
 
     assistant_messages = [
         {
@@ -446,13 +460,39 @@ def pre_process_aqua(
 
     assistant_unk_token, assistant_bot_token, assistant_eot_token = assistant_special_token
 
-    reasoning_list = instance['answer'].split('\n')
-    answer = reasoning_list[-1]
-    assert answer.startswith('####')
-    answer = answer.replace(',', '')
-    answer = answer[4:].strip()
+    raw_answer = str(instance.get('answer', '')).strip()
+    reasoning_list = raw_answer.split('\n') if raw_answer else []
+    answer = None
 
-    question = instance['question']
+    if reasoning_list:
+        last_line = reasoning_list[-1].strip()
+        if last_line.startswith('####'):
+            answer = last_line[4:].strip()
+
+    if answer is None:
+        for key in ['answer', 'gold', 'answer_from_dataset']:
+            value = instance.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text.startswith('####'):
+                text = text[4:].strip()
+            letter_match = re.search(r'(?i)\b([A-E])\b', text)
+            if letter_match is not None:
+                answer = letter_match.group(1).upper()
+                break
+
+    if answer is None:
+        raise ValueError('AQuA instance missing valid answer option (A-E).')
+
+    answer = answer.replace(',', '').strip().upper()
+    if answer not in {'A', 'B', 'C', 'D', 'E'}:
+        raise ValueError(f'Invalid AQuA answer option: {answer}')
+
+    question = str(instance.get('question', '')).strip()
+    options = instance.get('options')
+    if isinstance(options, str) and options.strip() and options.strip() not in question:
+        question = f'{question}\n{options.strip()}'
 
     thought_tokens = base_unk_token * num_thought_tokens
     soft_thoughts = f'{base_bot_token}{thought_tokens}{base_eot_token}'
@@ -566,7 +606,7 @@ def pre_process_aqua(
             f'(2) Do not need to generate the uninformative tokens such as serial number.\n'
             f'- The tokens should be useful for large language model to answer the question with the numbers.\n'
             f'...\n\n'
-            f'Here is the problem: {instance["question"]}.'
+            f'Here is the problem: {question}.'
         )
     elif assistant_backbone in ['qwen', 'qwen3']:
         assistant_template = (
@@ -582,7 +622,7 @@ def pre_process_aqua(
             f'- The other language model is good enough to understand the problem, so what you need to do is '
             f'generate some informative key tokens that summarize the problem.\n'
             f'...\n\n'
-            f'Here is the problem: {instance["question"]}.')
+            f'Here is the problem: {question}.')
     else:
         raise NotImplementedError
 
