@@ -20,6 +20,26 @@ from utils import pre_process_strategy_qa, pre_process_gsm8k, pre_process_aqua, 
 from sft_config import DEFAULT_SFT_CONFIG
 
 
+def _to_mapping(ins):
+    if isinstance(ins, dict):
+        return ins
+
+    fields = getattr(ins, 'fields', None)
+    if isinstance(fields, dict):
+        return fields
+
+    if hasattr(ins, 'items'):
+        try:
+            return dict(ins.items())
+        except Exception:
+            pass
+
+    try:
+        return dict(ins)
+    except Exception as e:
+        raise TypeError(f'Unsupported dataset instance type: {type(ins).__name__}') from e
+
+
 args = argparse.ArgumentParser()
 args.add_argument('--large_model_id', type=str, default='meta-llama/Llama-3.1-8B-Instruct')
 args.add_argument('--small_model_id', type=str, default='meta-llama/Llama-3.2-1B-Instruct')
@@ -195,6 +215,7 @@ if max_samples is not None:
 train_rows = []
 show_progress = sys.stderr.isatty() and os.getenv('TQDM_DISABLE', '0') not in {'1', 'true', 'TRUE', 'yes', 'YES'}
 for ins in tqdm(train_dataset, desc='Preprocess Training Set', disable=not show_progress):
+    ins = _to_mapping(ins)
     train_rows.append(
         preprocess_method(
             ins, base_tokenizer, assistant_tokenizer, num_thought_tokens,
@@ -209,6 +230,7 @@ for ins in tqdm(train_dataset, desc='Preprocess Training Set', disable=not show_
 
 eval_rows = []
 for ins in tqdm(eval_dataset, desc='Preprocess Testing Set', disable=not show_progress):
+    ins = _to_mapping(ins)
     eval_rows.append(
         preprocess_method(
             ins, base_tokenizer, assistant_tokenizer, num_thought_tokens,

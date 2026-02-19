@@ -109,12 +109,66 @@ def _read_json_or_jsonl(path: str) -> List[Dict[str, Any]]:
     except json.JSONDecodeError:
         pass
 
+    # Standard JSONL path: one JSON object per physical line.
     rows: List[Dict[str, Any]] = []
-    for line in raw.splitlines():
+    first_line_error: Optional[tuple[int, str, str]] = None
+    for line_no, line in enumerate(raw.splitlines(), start=1):
         line = line.strip()
         if not line:
             continue
-        rows.append(json.loads(line))
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            first_line_error = (line_no, str(e), line[:200])
+            rows = []
+            break
+    if rows:
+        return rows
+
+    # Fallback path: stream decode concatenated JSON objects.
+    # This handles files where an object spans multiple lines.
+    try:
+        decoder = json.JSONDecoder(strict=False)
+        stream_rows: List[Dict[str, Any]] = []
+        idx = 0
+        n = len(raw)
+        while idx < n:
+            while idx < n and raw[idx].isspace():
+                idx += 1
+            if idx >= n:
+                break
+            obj, end = decoder.raw_decode(raw, idx)
+            if isinstance(obj, dict):
+                stream_rows.append(obj)
+            elif isinstance(obj, list):
+                for item in obj:
+                    if not isinstance(item, dict):
+                        raise ValueError(f"Expected dict item, got {type(item).__name__}")
+                    stream_rows.append(item)
+            else:
+                raise ValueError(f"Expected JSON object/array, got {type(obj).__name__}")
+            idx = end
+        if stream_rows:
+            return stream_rows
+    except Exception as stream_e:
+        if first_line_error is not None:
+            line_no, line_msg, preview = first_line_error
+            raise ValueError(
+                f"Failed to parse dataset file `{path}`. "
+                f"Line-JSON parse first failed at line {line_no}: {line_msg}. "
+                f"Line preview: {preview!r}. "
+                f"Stream parse error: {stream_e}."
+            ) from stream_e
+        raise ValueError(f"Failed to parse dataset file `{path}`: {stream_e}") from stream_e
+
+    if first_line_error is not None:
+        line_no, line_msg, preview = first_line_error
+        raise ValueError(
+            f"Failed to parse dataset file `{path}`. "
+            f"Line-JSON parse first failed at line {line_no}: {line_msg}. "
+            f"Line preview: {preview!r}."
+        )
+
     return rows
 
 

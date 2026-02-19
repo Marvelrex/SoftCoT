@@ -7,6 +7,25 @@ import torch
 import re
 
 
+def _instance_get(instance: Any, key: str, default: Any = None) -> Any:
+    if isinstance(instance, dict):
+        return instance.get(key, default)
+
+    try:
+        return instance[key]
+    except Exception:
+        pass
+
+    fields = getattr(instance, "fields", None)
+    if isinstance(fields, dict) and key in fields:
+        return fields[key]
+
+    if hasattr(instance, key):
+        return getattr(instance, key)
+
+    return default
+
+
 def extract_computational_steps(reasoning_path: str):
     if reasoning_path.startswith('####'):
         return reasoning_path[4:].strip()
@@ -38,7 +57,7 @@ def pre_process_strategy_qa(
 
     assistant_unk_token, assistant_bot_token, assistant_eot_token = assistant_special_token
 
-    answer_value = instance.get('answer')
+    answer_value = _instance_get(instance, 'answer')
     if isinstance(answer_value, str):
         lowered = answer_value.strip().lower()
         if lowered in {'true', 'yes', '1'}:
@@ -47,13 +66,13 @@ def pre_process_strategy_qa(
             answer_value = False
     answer = 'Yes' if bool(answer_value) else 'No'
 
-    reasoning_list = instance.get('facts', [])
+    reasoning_list = _instance_get(instance, 'facts', [])
     if isinstance(reasoning_list, str):
         reasoning_list = [reasoning_list]
     elif not isinstance(reasoning_list, list):
         reasoning_list = []
 
-    question = instance.get('question', '')
+    question = _instance_get(instance, 'question', '')
 
     thought_tokens = base_unk_token * num_thought_tokens
     soft_thoughts = f'{base_bot_token}{thought_tokens}{base_eot_token}'
@@ -460,7 +479,7 @@ def pre_process_aqua(
 
     assistant_unk_token, assistant_bot_token, assistant_eot_token = assistant_special_token
 
-    raw_answer = str(instance.get('answer', '')).strip()
+    raw_answer = str(_instance_get(instance, 'answer', '')).strip()
     reasoning_list = raw_answer.split('\n') if raw_answer else []
     answer = None
 
@@ -471,7 +490,7 @@ def pre_process_aqua(
 
     if answer is None:
         for key in ['answer', 'gold', 'answer_from_dataset']:
-            value = instance.get(key)
+            value = _instance_get(instance, key)
             if value is None:
                 continue
             text = str(value).strip()
@@ -489,8 +508,8 @@ def pre_process_aqua(
     if answer not in {'A', 'B', 'C', 'D', 'E'}:
         raise ValueError(f'Invalid AQuA answer option: {answer}')
 
-    question = str(instance.get('question', '')).strip()
-    options = instance.get('options')
+    question = str(_instance_get(instance, 'question', '')).strip()
+    options = _instance_get(instance, 'options')
     if isinstance(options, str) and options.strip() and options.strip() not in question:
         question = f'{question}\n{options.strip()}'
 
