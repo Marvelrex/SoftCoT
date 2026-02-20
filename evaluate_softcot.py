@@ -18,6 +18,45 @@ from data_loader import GSM8KLoader, StrategyQALoader, AugASDivLoader, AQuALoade
 from utils import pre_process_gsm8k, pre_process_strategy_qa, pre_process_aqua, pre_process_du
 
 
+def _instance_get(instance, key, default=None):
+    if isinstance(instance, dict):
+        return instance.get(key, default)
+
+    try:
+        return instance[key]
+    except Exception:
+        pass
+
+    fields = getattr(instance, 'fields', None)
+    if isinstance(fields, dict) and key in fields:
+        return fields[key]
+
+    if hasattr(instance, key):
+        return getattr(instance, key)
+
+    return default
+
+
+def _to_mapping(ins):
+    if isinstance(ins, dict):
+        return ins
+
+    fields = getattr(ins, 'fields', None)
+    if isinstance(fields, dict):
+        return fields
+
+    if hasattr(ins, 'items'):
+        try:
+            return dict(ins.items())
+        except Exception:
+            pass
+
+    try:
+        return dict(ins)
+    except Exception as e:
+        raise TypeError(f'Unsupported dataset instance type: {type(ins).__name__}') from e
+
+
 def _normalize_bool(value):
     if isinstance(value, bool):
         return value
@@ -207,6 +246,7 @@ correct_count = 0
 predictions = []
 show_progress = sys.stderr.isatty() and os.getenv('TQDM_DISABLE', '0') not in {'1', 'true', 'TRUE', 'yes', 'YES'}
 for idx, ins in enumerate(tqdm(ds, disable=not show_progress)):
+    ins = _to_mapping(ins)
 
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -222,16 +262,16 @@ for idx, ins in enumerate(tqdm(ds, disable=not show_progress)):
                 answer = int(answer[4:])
     elif task_name in ['aqua']:
         answer = (
-            _extract_option_letter(ins.get('answer'), valid_letters='ABCDE')
-            or _extract_option_letter(ins.get('gold'), valid_letters='ABCDE')
-            or _extract_option_letter(ins.get('answer_from_dataset'), valid_letters='ABCDE')
+            _extract_option_letter(_instance_get(ins, 'answer'), valid_letters='ABCDE')
+            or _extract_option_letter(_instance_get(ins, 'gold'), valid_letters='ABCDE')
+            or _extract_option_letter(_instance_get(ins, 'answer_from_dataset'), valid_letters='ABCDE')
         )
         if answer is None:
             raise ValueError(f'Cannot parse AQuA gold answer for item index={idx}: {ins}')
     elif task_name in ['strategyqa']:
-        answer = _normalize_bool(ins.get('answer'))
+        answer = _normalize_bool(_instance_get(ins, 'answer'))
     elif task_name in ['du']:
-        answer = _extract_option_letter(ins.get('answer'), valid_letters='ABCDEF')
+        answer = _extract_option_letter(_instance_get(ins, 'answer'), valid_letters='ABCDEF')
         if answer is None:
             raise ValueError(f'Cannot parse DU gold answer for item index={idx}: {ins}')
     else:
